@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin RBF Terminal</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='%2300ff00'%3e%3cpath d='M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.158-.896 1.442-1.434 1.442-.54 0-1.088-.284-1.088-.888 0-.46.284-.782.888-.782.496 0 .888.322.888.888 0 .284-.108.568-.254.34zm-1.434 1.442c-.676 0-1.224-.548-1.224-1.224s.548-1.224 1.224-1.224 1.224.548 1.224 1.224-.548 1.224-1.224 1.224z'/%3e%3c/svg%3e">
+</head>
+<body>
+    <div class="terminal">
+        <!-- Terminal Header -->
+        <div class="terminal-header">
+            <div class="terminal-title">
+                <div class="terminal-controls">
+                    <div class="terminal-control control-close"></div>
+                    <div class="terminal-control control-minimize"></div>
+                    <div class="terminal-control control-maximize"></div>
+                </div>
+                <span>user@bitcoin-rbf:~$</span>
+            </div>
+        </div>
+
+        <!-- Terminal Content -->
+        <div class="terminal-content">
+            <!-- ASCII Art Header -->
+            <div class="ascii-art large ascii-bitcoin">
+██████╗ ██╗████████╗ ██████╗ ██████╗ ██╗███╗   ██╗    ██████╗ ██████╗ ███████╗
+██╔══██╗██║╚══██╔══╝██╔════╝██╔═══██╗██║████╗  ██║    ██╔══██╗██╔══██╗██╔════╝
+██████╔╝██║   ██║   ██║     ██║   ██║██║██╔██╗ ██║    ██████╔╝██████╔╝█████╗  
+██╔══██╗██║   ██║   ██║     ██║   ██║██║██║╚██╗██║    ██╔══██╗██╔══██╗██╔══╝  
+██████╔╝██║   ██║   ╚██████╗╚██████╔╝██║██║ ╚████║    ██║  ██║██████╔╝██║     
+╚═════╝ ╚═╝   ╚═╝    ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝    ╚═╝  ╚═╝╚═════╝ ╚═╝     
+                                                                                
+████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗ █████╗ ██╗                 
+╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗██║                 
+   ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║███████║██║                 
+   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██╔══██║██║                 
+   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██║  ██║███████╗            
+   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝            
+            </div>
+
+            <!-- System Status -->
+            <div class="terminal-status">
+                <div class="status-indicator status-online"></div>
+                <span class="terminal-line">SYSTEM STATUS: ONLINE | NETWORK: MAINNET | SESSION: ANONYMOUS</span>
+            </div>
+
+            <div class="terminal-line warning">
+                <span class="prompt-symbol">⚠</span> WARNING: MAINNET ENVIRONMENT DETECTED - REAL BITCOIN TRANSACTIONS
+            </div>
+            <div class="terminal-line info">
+                <span class="prompt-symbol">ℹ</span> REPLACE-BY-FEE (RBF) TRANSACTION MANAGER v2.0.0
+            </div>
+            <div class="terminal-line">
+                <span class="prompt-symbol">></span> Type 'help' for available commands
+            </div>
+
+            <!-- Main Terminal Sections -->
+            
+            <!-- Wallet Setup Section -->
+            <div id="wallet-setup" class="terminal-section">
+                <div class="section-title">WALLET OPERATIONS</div>
+                
+                <div class="ascii-art small">
+    ██╗    ██╗ █████╗ ██╗     ██╗     ███████╗████████╗
+    ██║    ██║██╔══██╗██║     ██║     ██╔════╝╚══██╔══╝
+    ██║ █╗ ██║███████║██║     ██║     █████╗     ██║   
+    ██║███╗██║██╔══██║██║     ██║     ██╔══╝     ██║   
+    ╚███╔███╔╝██║  ██║███████╗███████╗███████╗   ██║   
+     ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝   ╚═╝   
+                </div>
+
+                <div class="terminal-line">Available wallet commands:</div>
+                
+                <div class="terminal-options">
+                    <button id="generate-key-btn" class="terminal-option">generate_key - Create new Bitcoin keypair</button>
+                    <button id="import-key-btn" class="terminal-option">import_privkey - Import existing private key</button>
+                    <button id="import-mnemonic-btn" class="terminal-option">import_mnemonic - Import 12-word recovery phrase</button>
+                </div>
+
+                <!-- Import Forms -->
+                <div id="import-key-form" class="terminal-form hidden">
+                    <div class="terminal-line success">EXECUTING: import_privkey</div>
+                    <div class="form-group">
+                        <div class="form-label">PRIVATE KEY (WIF FORMAT):</div>
+                        <input type="password" id="private-key-input" class="terminal-input" placeholder="Enter private key in WIF format...">
+                        <div class="form-help">Expected format: K/L prefix for mainnet, 51-52 characters</div>
+                    </div>
+                    <div class="terminal-options">
+                        <button id="confirm-import-btn" class="terminal-option">execute_import</button>
+                        <button id="cancel-import-btn" class="terminal-option">abort_operation</button>
+                    </div>
+                </div>
+
+                <div id="import-mnemonic-form" class="terminal-form hidden">
+                    <div class="terminal-line success">EXECUTING: import_mnemonic</div>
+                    <div class="form-group">
+                        <div class="form-label">RECOVERY PHRASE (12 WORDS):</div>
+                        <textarea id="mnemonic-input" class="terminal-textarea" placeholder="Enter 12-word mnemonic phrase separated by spaces..."></textarea>
+                        <div class="form-help">BIP39 standard mnemonic - 12 words separated by spaces</div>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label">DERIVATION PATH:</div>
+                        <input type="text" id="derivation-path-input" class="terminal-input" value="m/84'/0'/0'/0/0" placeholder="m/84'/0'/0'/0/0">
+                        <div class="form-help">BIP84 path for native SegWit addresses</div>
+                    </div>
+                    <div class="terminal-options">
+                        <button id="confirm-mnemonic-btn" class="terminal-option">execute_import</button>
+                        <button id="cancel-mnemonic-btn" class="terminal-option">abort_operation</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wallet Info Section -->
+            <div id="wallet-info" class="terminal-section hidden">
+                <div class="section-title">WALLET STATUS</div>
+                
+                <div class="ascii-art small">
+    ██╗    ██╗ █████╗ ██╗     ██╗     ███████╗████████╗    ██╗███╗   ██╗███████╗ ██████╗ 
+    ██║    ██║██╔══██╗██║     ██║     ██╔════╝╚══██╔══╝    ██║████╗  ██║██╔════╝██╔═══██╗
+    ██║ █╗ ██║███████║██║     ██║     █████╗     ██║       ██║██╔██╗ ██║█████╗  ██║   ██║
+    ██║███╗██║██╔══██║██║     ██║     ██╔══╝     ██║       ██║██║╚██╗██║██╔══╝  ██║   ██║
+    ╚███╔███╔╝██║  ██║███████╗███████╗███████╗   ██║       ██║██║ ╚████║██║     ╚██████╔╝
+     ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝   ╚═╝       ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝ 
+                </div>
+
+                <div class="terminal-address">
+                    <span id="wallet-address" class="address-value"></span>
+                    <button id="copy-address-btn" class="copy-button">COPY</button>
+                </div>
+
+                <div class="terminal-balance">
+                    <div class="balance-label">WALLET BALANCE:</div>
+                    <div id="wallet-balance" class="balance-value">Loading...</div>
+                </div>
+
+                <div class="qr-container">
+                    <div class="qr-title">DEPOSIT QR CODE:</div>
+                    <canvas id="address-qr-code" class="qr-code"></canvas>
+                    <div class="terminal-line">Scan to deposit Bitcoin to this address</div>
+                </div>
+
+                <div class="terminal-options">
+                    <button id="refresh-balance-btn" class="terminal-option">refresh_balance</button>
+                    <button id="export-key-btn" class="terminal-option">export_privkey</button>
+                </div>
+            </div>
+
+            <!-- Transaction Creation Section -->
+            <div id="create-transaction" class="terminal-section hidden">
+                <div class="section-title">TRANSACTION BUILDER</div>
+                
+                <div class="ascii-art small">
+    ████████╗██╗  ██╗    ██████╗ ██╗   ██╗██╗██╗     ██████╗ ███████╗██████╗ 
+    ╚══██╔══╝╚██╗██╔╝    ██╔══██╗██║   ██║██║██║     ██╔══██╗██╔════╝██╔══██╗
+       ██║    ╚███╔╝     ██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝
+       ██║    ██╔██╗     ██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗
+       ██║   ██╔╝ ██╗    ██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║
+       ╚═╝   ╚═╝  ╚═╝    ╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝
+                </div>
+
+                <form id="transaction-form" class="terminal-form">
+                    <div class="terminal-line success">INITIALIZING: transaction_builder</div>
+                    
+                    <div class="form-group">
+                        <div class="form-label">RECIPIENT ADDRESS:</div>
+                        <input type="text" id="recipient-address" class="terminal-input" placeholder="bc1..." required>
+                        <div class="form-help">Destination Bitcoin address (mainnet)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="form-label">AMOUNT (BTC):</div>
+                        <input type="number" id="amount" class="terminal-input" placeholder="0.001" min="0.00000546" step="0.00000001" required>
+                        <div class="form-help">Minimum: 0.00000546 BTC (546 sats dust limit)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="form-label">FEE RATE (SAT/vB):</div>
+                        <input type="number" id="fee-rate" class="terminal-input" value="5" min="1" required>
+                        <div class="form-help">Higher = faster confirmation</div>
+                    </div>
+                    
+                    <div class="terminal-checkbox">
+                        <input type="checkbox" id="rbf-enabled" checked>
+                        <span>ENABLE RBF (Replace-By-Fee)</span>
+                    </div>
+                    <div class="form-help">Allows transaction acceleration/cancellation</div>
+                    
+                    <div class="terminal-options">
+                        <button type="submit" class="terminal-option">execute_transaction</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Transaction Management Section -->
+            <div id="transaction-management" class="terminal-section hidden">
+                <div class="section-title">TRANSACTION POOL</div>
+                
+                <div class="ascii-art small">
+    ████████╗██╗  ██╗    ██████╗  ██████╗  ██████╗ ██╗     
+    ╚══██╔══╝╚██╗██╔╝    ██╔══██╗██╔═══██╗██╔═══██╗██║     
+       ██║    ╚███╔╝     ██████╔╝██║   ██║██║   ██║██║     
+       ██║    ██╔██╗     ██╔═══╝ ██║   ██║██║   ██║██║     
+       ██║   ██╔╝ ██╗    ██║     ╚██████╔╝╚██████╔╝███████╗
+       ╚═╝   ╚═╝  ╚═╝    ╚═╝      ╚═════╝  ╚═════╝ ╚══════╝
+                </div>
+
+                <div id="transactions-list" class="transaction-list">
+                    <div class="terminal-line">No active transactions found.</div>
+                    <div class="terminal-line">Use 'execute_transaction' to create new transaction.</div>
+                </div>
+            </div>
+
+            <!-- Command Prompt -->
+            <div class="terminal-prompt">
+                <span class="prompt-symbol">user@bitcoin-rbf</span>:<span class="prompt-path">~</span>$ <span class="cursor"></span>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Export Key Modal -->
+    <div id="export-key-modal" class="terminal-modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">⚠ EXPORT PRIVATE KEY</div>
+                <button id="close-export-modal" class="modal-close">X</button>
+            </div>
+            <div class="modal-body">
+                <div class="terminal-line error">CRITICAL SECURITY WARNING:</div>
+                <div class="terminal-line">• Private key controls ALL Bitcoin in wallet</div>
+                <div class="terminal-line">• Anyone with key can spend your Bitcoin</div>
+                <div class="terminal-line">• Never share or transmit over network</div>
+                <div class="terminal-line">• Use for offline storage/backup only</div>
+                
+                <div class="form-group">
+                    <div class="form-label">PRIVATE KEY (WIF):</div>
+                    <textarea id="exported-private-key" class="terminal-textarea" readonly></textarea>
+                </div>
+                
+                <div class="terminal-options">
+                    <button id="copy-private-key-btn" class="terminal-option">copy_to_clipboard</button>
+                    <button id="confirm-export-understanding" class="terminal-option">acknowledge_risk</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="terminal-loading hidden">
+        <div class="loading-text">Processing...</div>
+        <div class="loading-spinner">⣾⣽⣻⢿⡿⣟⣯⣷</div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container" class="alert-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <script src="terminal-matrix.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+Core idea
+RBF is a mempool policy (BIP125). It lets you replace an unconfirmed tx with another tx that:
+
+Spends (mostly) the same inputs,
+
+Pays a higher absolute fee and a higher feerate (sats/vB),
+
+Doesn’t add new unconfirmed inputs.
+
+Whether a tx is replaceable is signaled by the nSequence on each input: any input with nSequence < 0xFFFFFFFE opts into RBF.
+
+What “native SegWit” changes
+Nothing about RBF itself. The difference is how you add inputs and sign:
+
+For P2WPKH inputs you must include witnessUtxo (prevout script + value).
+
+Size/fee math differs slightly (P2WPKH inputs are ~68 vB each; outputs ~31 vB). Use a proper estimator.
+
+Data you need before building
+UTXOs you control: txid, vout, value (sats), and prevout scriptPubKey (hex) or the address it pays to.
+
+Recipient(s) and amounts in sats.
+
+Change address (your bech32).
+
+Target feerate (sats/vB) from a fee source.
+
+For replacement: the original tx’s inputs, outputs, fee, and vsize/feerate (so you can guarantee your replacement is strictly higher).
+
+Build the original (RBF-enabled) tx — P2WPKH
+Inputs
+
+Add each UTXO with:
+
+hash = txid, index = vout
+
+sequence = e.g. 0xFFFFFFFD (RBF ON)
+
+witnessUtxo = { script: <prevout scriptPubKey as Buffer>, value: <sats> }
+
+Outputs
+
+Add recipient outputs.
+
+Add change output (if change ≥ dust; otherwise fold into fee).
+
+Fee calc
+
+Estimate vbytes for (N inputs, M outputs).
+
+fee = ceil(feerate * vbytes) in sats.
+
+Ensure sum(inputs) = sum(outputs) + fee.
+
+Sign & finalize locally (never upload keys).
+
+Broadcast to an Esplora-style /tx endpoint (raw hex in body). Record txid.
+
+Build the replacement (speed-up) — “same payment, higher fee”
+Preconditions: original is unconfirmed and RBF-signaled (all inputs with sequence < 0xFFFFFFFE).
+
+Reuse the same inputs as the original (exact same UTXO set).
+
+Outputs: keep the same recipients/amounts; adjust change to fund a higher fee.
+
+Sequences: keep RBF sequences (< 0xFFFFFFFE).
+
+Fees: compute a new target feerate (e.g., previous × 1.3 or “fast” tier).
+
+Your replacement must have strictly higher absolute fee and higher sats/vB than the original.
+
+If change can’t cover the bump, you may add confirmed inputs; do not add new unconfirmed inputs.
+
+Sign, finalize, broadcast.
+
+If you get “insufficient fee to replace”, increase the feerate/absolute fee and try again.
+
+Build the cancel (replace-to-self) — “double-spend to yourself”
+Same preconditions as above.
+
+Reuse the same inputs as the original.
+
+Outputs: create one output to your own address (bech32).
+
+Fees: set a much higher feerate (e.g., fast + margin). Compute the output value as sum(inputs) - fee.
+
+Sequences: RBF sequences on inputs.
+
+Sign, finalize, broadcast.
+
+Mempool marks the original as replaced when this propagates.
+
+“Am I allowed to replace?”
+Check original tx input sequences: each should be < 0xFFFFFFFE. If any input is final (0xFFFFFFFF), RBF not allowed → offer CPFP instead.
+
+CPFP fallback (when original isn’t RBF)
+Spend the original tx’s change output in a high-fee child.
+
+The miner evaluates the package feerate (parent + child). If high enough, both get mined.
+
+Correct fee math (rough but safe for P2WPKH)
+P2WPKH input: ~68 vB
+
+Output: ~31 vB
+
+Overhead: ~10 vB
+
+Example estimate: vbytes ≈ 10 + 68*Nin + 31*Nout
+
+fee (sats) = ceil(feerate * vbytes)
+
+Dust threshold: ~546 sats for typical outputs—avoid creating dust change; better to add to fee.
+
+Common failure reasons & fixes
+Not strictly higher fee / feerate → bump more.
+
+Added an unconfirmed input not in the original conflict set → remove it or replace with a confirmed input.
+
+Original already confirmed → you can’t replace it; hide RBF actions.
+
+Too small change to fund the bump → reduce recipient isn’t allowed (that changes the payment); instead reduce change or add confirmed input.
+
+Policy variance across nodes → aim comfortably higher than the original fee/feerate, not just 1 sat/vB more.

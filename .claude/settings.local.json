@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(npm install)",
+      "Bash(timeout 5 npm start)",
+      "Bash(start /b npm start)",
+      "Bash(curl:*)",
+      "Bash(timeout 3 npm start)",
+      "Bash(taskkill:*)",
+      "Bash(wmic process where processid=9524 delete:*)",
+      "Bash(start /min node server.js)",
+      "Bash(wmic process where processid=11128 delete:*)",
+      "Bash(wmic process where processid=2016 delete:*)",
+      "Bash(wmic process where processid=9400 delete:*)",
+      "Bash(wmic process where processid=10284 delete:*)",
+      "Bash(wmic process where processid=24440 delete:*)",
+      "Bash(npm start)",
+      "Bash(wmic process where processid=1724 delete:*)",
+      "Bash(npm install:*)",
+      "Bash(wmic process where processid=14220 delete:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(del nul)",
+      "Bash(rm:*)"
+    ],
+    "deny": [],
+    "defaultMode": "acceptEdits"
+  }
+}
