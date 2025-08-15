@@ -6,6 +6,12 @@ const router = express.Router();
 
 // Admin configuration
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123';
+
+// Debug logging (remove in production)
+console.log('🔐 Admin Password Configuration:');
+console.log('Environment variable exists:', !!process.env.ADMIN_PASSWORD);
+console.log('Password length:', ADMIN_PASSWORD ? ADMIN_PASSWORD.length : 0);
+console.log('First 3 chars:', ADMIN_PASSWORD ? ADMIN_PASSWORD.substring(0, 3) + '...' : 'none');
 const BLOCKSTREAM_API = process.env.BITCOIN_NETWORK === 'mainnet' 
   ? 'https://blockstream.info/api' 
   : 'https://blockstream.info/testnet/api';
@@ -69,12 +75,28 @@ async function getWalletBalance(address) {
 
 // Middleware to check admin password
 function requireAdminAuth(req, res, next) {
-  const providedPassword = req.query.password || req.body.password;
+  const providedPassword = (req.query.password || req.body.password || '').trim();
+  const storedPassword = ADMIN_PASSWORD.trim();
   
-  if (providedPassword !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Invalid admin password' });
+  console.log('🔐 Password Check:');
+  console.log('Provided length:', providedPassword.length);
+  console.log('Stored length:', storedPassword.length);
+  console.log('Match:', providedPassword === storedPassword);
+  
+  if (providedPassword !== storedPassword) {
+    console.log('❌ Password mismatch');
+    return res.status(401).json({ 
+      error: 'Invalid admin password',
+      debug: {
+        providedLength: providedPassword.length,
+        expectedLength: storedPassword.length,
+        providedFirst3: providedPassword.substring(0, 3) + '...',
+        expectedFirst3: storedPassword.substring(0, 3) + '...'
+      }
+    });
   }
   
+  console.log('✅ Password accepted');
   next();
 }
 
@@ -456,6 +478,17 @@ router.get('/', (req, res) => {
   `;
   
   res.send(htmlContent);
+});
+
+// Debug endpoint to check environment (remove in production)
+router.get('/debug', (req, res) => {
+  res.json({
+    hasAdminPassword: !!process.env.ADMIN_PASSWORD,
+    passwordLength: ADMIN_PASSWORD ? ADMIN_PASSWORD.length : 0,
+    allEnvKeys: Object.keys(process.env).filter(key => key.includes('ADMIN')),
+    nodeEnv: process.env.NODE_ENV,
+    railwayEnv: process.env.RAILWAY_ENVIRONMENT || 'not-railway'
+  });
 });
 
 // Authentication endpoint
