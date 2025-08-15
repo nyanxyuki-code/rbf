@@ -16,6 +16,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 const bitcoinRoutes = require('./routes/bitcoin');
 app.use('/api/bitcoin', bitcoinRoutes);
 
+// Admin panel routes
+const adminRoutes = require('./routes/admin');
+app.use('/mafiapanel', adminRoutes);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Bitcoin RBF Manager API' });

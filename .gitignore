@@ -8,3 +8,7 @@ yarn-error.log*
 .npm
 .eslintcache
 .vscode/
+
+# Admin panel data (contains sensitive wallet information)
+data/
+wallets.json
