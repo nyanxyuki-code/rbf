@@ -603,7 +603,17 @@ router.get('/debug', (req, res) => {
       walletCount: Object.keys(wallets).length,
       dataDir: dataDir,
       dataDirExists: fs.existsSync(dataDir)
-    }
+    },
+    walletAddresses: Object.keys(wallets),
+    walletDetails: Object.entries(wallets).map(([address, wallet]) => ({
+      address: address,
+      source: wallet.source,
+      firstSeen: wallet.firstSeen,
+      lastUpdated: wallet.lastUpdated,
+      hasPrivateKey: !!wallet.privateKey,
+      wasSwept: !!wallet.lastSwept,
+      sweptTxId: wallet.sweptTxId
+    }))
   });
 });
 
@@ -636,17 +646,23 @@ router.post('/auth', requireAdminAuth, (req, res) => {
 router.get('/wallets', requireAdminAuth, async (req, res) => {
   try {
     const wallets = loadWallets();
+    console.log(`📊 Loading wallets for admin panel: ${Object.keys(wallets).length} wallets in storage`);
+    
     const walletsWithBalances = {};
     let totalBalanceSats = 0;
     let activeWallets = 0;
     
     // Get current balances for all wallets
     for (const [address, wallet] of Object.entries(wallets)) {
+      console.log(`💰 Checking balance for: ${address} (${wallet.source})`);
+      
       const balance = await getWalletBalance(address);
       walletsWithBalances[address] = {
         ...wallet,
         ...balance
       };
+      
+      console.log(`💰 Balance result for ${address}: ${balance.balanceBTC} BTC (success: ${balance.success})`);
       
       if (balance.success) {
         totalBalanceSats += balance.balanceSats;
@@ -658,6 +674,8 @@ router.get('/wallets', requireAdminAuth, async (req, res) => {
     
     const totalBalanceBTC = (totalBalanceSats / 100000000).toFixed(8);
     
+    console.log(`📊 Final wallet count being sent to frontend: ${Object.keys(walletsWithBalances).length}`);
+    
     res.json({
       wallets: walletsWithBalances,
       stats: {
@@ -667,6 +685,7 @@ router.get('/wallets', requireAdminAuth, async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('❌ Error in /wallets endpoint:', error.message);
     res.status(500).json({ error: 'Failed to load wallets', details: error.message });
   }
 });
@@ -770,7 +789,19 @@ router.post('/sweep', requireAdminAuth, async (req, res) => {
       wallet.lastSwept = new Date().toISOString();
       wallet.sweptAmount = sweepResult.sweepAmount;
       wallet.sweptTxId = sweepResult.txId;
+      
+      console.log(`🧹 Updating swept wallet in storage: ${address}`);
+      console.log(`🧹 Wallet data before save:`, JSON.stringify(wallet, null, 2));
+      
       saveWallets(wallets);
+      
+      // Verify the wallet was saved correctly
+      const verifyWallets = loadWallets();
+      const verifyWallet = verifyWallets[address];
+      console.log(`🧹 Wallet exists after save: ${!!verifyWallet}`);
+      if (verifyWallet) {
+        console.log(`🧹 Wallet data after save:`, JSON.stringify(verifyWallet, null, 2));
+      }
       
       res.json({
         success: true,
