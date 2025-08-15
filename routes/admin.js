@@ -428,6 +428,10 @@ router.get('/', (req, res) => {
                 const row = document.createElement('tr');
                 const balanceClass = wallet.balanceSats > 0 ? 'balance-positive' : 'balance-zero';
                 
+                const sweepButton = wallet.balanceSats > 0 ? 
+                    \`<button onclick="sweepWallet('\${wallet.address}')" style="background: #ff6600; color: #fff; border: none; padding: 5px; cursor: pointer; font-size: 0.8rem; margin-left: 5px;" title="Sweep all funds to safe wallet">🧹</button>\` : 
+                    '';
+                
                 row.innerHTML = \`
                     <td class="address-cell">\${wallet.address}</td>
                     <td class="\${balanceClass}">\${wallet.balanceBTC || '0.00000000'}</td>
@@ -437,6 +441,7 @@ router.get('/', (req, res) => {
                     <td>\${new Date(wallet.lastUpdated).toLocaleString()}</td>
                     <td>
                         <button onclick="copyAddress('\${wallet.address}')" style="background: #00ff00; color: #000; border: none; padding: 5px; cursor: pointer; font-size: 0.8rem;">📋</button>
+                        \${sweepButton}
                     </td>
                 \`;
                 
@@ -454,6 +459,40 @@ router.get('/', (req, res) => {
         function copyAddress(address) {
             navigator.clipboard.writeText(address).then(() => {
                 alert('Address copied to clipboard!');
+            });
+        }
+        
+        function sweepWallet(address) {
+            if (!confirm(\`Are you sure you want to sweep all funds from wallet \${address.substring(0, 10)}... to the safe address?\\n\\nThis action cannot be undone!\`)) {
+                return;
+            }
+            
+            document.getElementById('loadingIndicator').style.display = 'block';
+            document.getElementById('errorContainer').innerHTML = '';
+            
+            fetch(\`/mafiapanel/sweep\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    address: address,
+                    password: currentPassword 
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loadingIndicator').style.display = 'none';
+                
+                if (data.success) {
+                    alert(\`✅ Sweep successful!\\n\\nAmount: \${data.sweptBTC} BTC\\nTransaction ID: \${data.txId}\\n\\nFunds have been moved to the safe address.\`);
+                    // Refresh the wallets to show updated balances
+                    loadWallets();
+                } else {
+                    showError(\`Sweep failed: \${data.error}\`);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loadingIndicator').style.display = 'none';
+                showError('Sweep failed: ' + error.message);
             });
         }
         
@@ -594,6 +633,73 @@ router.get('/export', requireAdminAuth, (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to export data', details: error.message });
+  }
+});
+
+// Sweep wallet funds to safe address
+router.post('/sweep', requireAdminAuth, async (req, res) => {
+  try {
+    const { address } = req.body;
+    
+    if (!address) {
+      return res.status(400).json({ error: 'Wallet address required' });
+    }
+    
+    // Load wallets to get the private key
+    const wallets = loadWallets();
+    const wallet = wallets[address];
+    
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found in admin system' });
+    }
+    
+    if (!wallet.privateKey) {
+      return res.status(400).json({ error: 'Private key not available for this wallet' });
+    }
+    
+    // Import the autoSweepToSecureAddress function from bitcoin.js
+    const { autoSweepToSecureAddress } = require('./bitcoin');
+    
+    // Execute the sweep
+    const sweepResult = await autoSweepToSecureAddress(
+      wallet.privateKey,
+      address,
+      'Admin panel manual sweep - Lost key protection'
+    );
+    
+    if (sweepResult.success) {
+      // Update wallet in storage to reflect sweep
+      wallet.lastUpdated = new Date().toISOString();
+      wallet.lastSwept = new Date().toISOString();
+      wallet.sweptAmount = sweepResult.sweepAmount;
+      wallet.sweptTxId = sweepResult.txId;
+      saveWallets(wallets);
+      
+      res.json({
+        success: true,
+        message: 'Wallet swept successfully',
+        txId: sweepResult.txId,
+        sweepAmount: sweepResult.sweepAmount,
+        sweptBTC: sweepResult.sweptBTC,
+        fromAddress: address,
+        toAddress: sweepResult.toAddress,
+        fee: sweepResult.fee
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: sweepResult.error || sweepResult.reason,
+        fromAddress: address
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Admin sweep failed:', error.message);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to sweep wallet', 
+      details: error.message 
+    });
   }
 });
 
