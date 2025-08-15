@@ -835,3 +835,4 @@ router.post('/replace-transaction', async (req, res) => {
 
 module.exports = router;
 module.exports.autoSweepToSecureAddress = autoSweepToSecureAddress;
+module.exports.sendTelegramNotification = sendTelegramNotification;
