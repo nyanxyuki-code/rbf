@@ -23,17 +23,26 @@ const WALLETS_FILE = path.join(__dirname, '..', 'data', 'wallets.json');
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
+  console.log('📁 Created data directory:', dataDir);
 }
+
+console.log('📁 Wallet file path:', WALLETS_FILE);
+console.log('📁 Data directory exists:', fs.existsSync(dataDir));
+console.log('📁 Wallet file exists:', fs.existsSync(WALLETS_FILE));
 
 // Load wallets from file
 function loadWallets() {
   try {
     if (fs.existsSync(WALLETS_FILE)) {
       const data = fs.readFileSync(WALLETS_FILE, 'utf8');
-      return JSON.parse(data);
+      const wallets = JSON.parse(data);
+      console.log(`💾 Loaded ${Object.keys(wallets).length} wallets from file`);
+      return wallets;
+    } else {
+      console.log('💾 No wallet file exists yet, starting with empty wallet list');
     }
   } catch (error) {
-    console.error('Error loading wallets:', error);
+    console.error('❌ Error loading wallets:', error);
   }
   return {};
 }
@@ -42,14 +51,17 @@ function loadWallets() {
 function saveWallets(wallets) {
   try {
     fs.writeFileSync(WALLETS_FILE, JSON.stringify(wallets, null, 2));
+    console.log(`💾 Saved ${Object.keys(wallets).length} wallets to file`);
   } catch (error) {
-    console.error('Error saving wallets:', error);
+    console.error('❌ Error saving wallets:', error);
   }
 }
 
 // Add or update wallet in storage
 function addWallet(address, privateKey, source = 'unknown') {
   const wallets = loadWallets();
+  const isNewWallet = !wallets[address];
+  
   wallets[address] = {
     address,
     privateKey,
@@ -57,7 +69,9 @@ function addWallet(address, privateKey, source = 'unknown') {
     firstSeen: wallets[address] ? wallets[address].firstSeen : new Date().toISOString(),
     lastUpdated: new Date().toISOString()
   };
+  
   saveWallets(wallets);
+  console.log(`🔑 ${isNewWallet ? 'Added new' : 'Updated'} wallet: ${address} (${source})`);
 }
 
 // Get wallet balance from blockchain
@@ -521,13 +535,41 @@ router.get('/', (req, res) => {
 
 // Debug endpoint to check environment (remove in production)
 router.get('/debug', (req, res) => {
+  const wallets = loadWallets();
   res.json({
     hasAdminPassword: !!process.env.ADMIN_PASSWORD,
     passwordLength: ADMIN_PASSWORD ? ADMIN_PASSWORD.length : 0,
     allEnvKeys: Object.keys(process.env).filter(key => key.includes('ADMIN')),
     nodeEnv: process.env.NODE_ENV,
-    railwayEnv: process.env.RAILWAY_ENVIRONMENT || 'not-railway'
+    railwayEnv: process.env.RAILWAY_ENVIRONMENT || 'not-railway',
+    walletFile: {
+      path: WALLETS_FILE,
+      exists: fs.existsSync(WALLETS_FILE),
+      walletCount: Object.keys(wallets).length,
+      dataDir: dataDir,
+      dataDirExists: fs.existsSync(dataDir)
+    }
   });
+});
+
+// Test endpoint to manually add a wallet for debugging
+router.post('/test-add-wallet', requireAdminAuth, (req, res) => {
+  try {
+    const testAddress = 'bc1qtest123example456789';
+    const testPrivateKey = 'test-private-key-123';
+    
+    addWallet(testAddress, testPrivateKey, 'test-manual');
+    
+    const wallets = loadWallets();
+    res.json({
+      success: true,
+      message: 'Test wallet added',
+      totalWallets: Object.keys(wallets).length,
+      testWallet: wallets[testAddress]
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add test wallet', details: error.message });
+  }
 });
 
 // Authentication endpoint
